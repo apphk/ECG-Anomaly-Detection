@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Real-time graph</title>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div>
+        <canvas id="myChart"></canvas>
+    </div>
+    <button id="triggerButton">Toggle normal / abnormal data</button>
+
+    <script>
+        var ctx = document.getElementById('myChart').getContext('2d');
+
+        var initialLabels = Array(1400).fill("");
+
+        var data = {
+            labels: initialLabels,
+            datasets: [
+                {
+                    label: 'Predictions',
+                    data: [],
+                    backgroundColor: [],
+                    borderColor: [],
+                    borderWidth: 1,
+                    pointRadius: 0 // Add this line to hide points
+                }]
+        };
+
+        var myChart = new Chart(ctx, {
+            type: 'line',
+            data: data,
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        var socket = io.connect('http://localhost:5001');
+
+        var xCounter = 0;
+        var lastLabel = 'normal'; // Store the last label received
+
+        socket.on('new_prediction', function (msg) {
+            var predictions = msg.prediction;
+            console.log(msg.label)
+
+            // If the label changed to 'abnormal', clear the data arrays and reset the xCounter
+            if (lastLabel === 'normal' && msg.label === 'abnormal') {
+                data.datasets[0].data = [];
+                data.datasets[0].backgroundColor = [];
+                data.datasets[0].borderColor = [];
+                xCounter = 0;
+            }
+
+            // Loop through each prediction
+            predictions.forEach(function (pred, index) {
+                // Check if the dataset is full
+                if (data.datasets[0].data.length === 1400) {
+                    // Remove the oldest prediction
+                    data.datasets[0].data.shift();
+                    data.datasets[0].backgroundColor.shift();
+                    data.datasets[0].borderColor.shift();
+                }
+
+                // Add new prediction to the data
+                data.datasets[0].data.push({ x: xCounter, y: pred });
+
+                // Modify color based on the label
+                if (msg.label === 'normal') {
+                    data.datasets[0].backgroundColor.push('rgba(0, 123, 255, 0.5)');
+                    data.datasets[0].borderColor.push('rgba(0, 123, 255, 1)');
+                } else {
+                    data.datasets[0].backgroundColor.push('rgba(255, 0, 0, 0.5)');
+                    data.datasets[0].borderColor.push('rgba(255, 0, 0, 1)');
+                }
+
+                xCounter++;
+            });
+
+            // Update the last label
+            lastLabel = msg.label;
+
+            myChart.update();
+        });
+
+        triggerButton.addEventListener('click', function () {
+            fetch('/trigger');
+        });
+    </script>
+
+</body>
+
+</html>
